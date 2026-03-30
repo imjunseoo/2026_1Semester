@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>20225238 임준서</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+            }
+        </style>
+    </head>
+    <body>
+        <button id="buttonDir">Change Rotation Direction</button>
+        <select id="myMenu" size = "4">            
+            <option value="fast">Spin Faster</option>
+            <option value="slow">Spin Slower</option>
+            <option value="big">Make Bigger</option>
+            <option value="small">Make Smaller</option>
+        </select><br>
+        <div>
+            Tiem Interval: 10<input id="sliderTime" type="range" min="10" max="100" step="5" value="100"> 100
+        </div>
+        <canvas id="glCanvas"></canvas>
+        <script type="text/javascript" src="initShaders.js"></script>
+        <script type="x-shader/x-vertex" id="vertex-shader">#version 300 es
+            in vec2 vPosition;
+            in vec3 vColor;
+            out vec4 fColor;
+            uniform float theta, length;
+
+            void main()
+            {
+                //gl_Position = vec4(vPosition, 0.0, 1.0);
+                float s = length * sin(theta);
+                float c = length * cos(theta);
+                gl_Position.x = c * vPosition.x - s * vPosition.y;
+                gl_Position.y = s * vPosition.x + c * vPosition.y;
+                gl_Position.z = 0.0;
+                gl_Position.w = 1.0;
+                fColor = vec4(vColor, 1.0);
+            }
+        </script>
+        <script type="x-shader/x-fragment" id="fragment-shader">#version 300 es
+            precision mediump float;
+
+            in vec4 fColor;
+            out vec4 fragColor;
+
+            void main()
+            {
+                fragColor = fColor;
+            }
+        </script>
+        <script type="module">
+            var gl;
+            let vertices = new Float32Array([ 0, 1, -1, 0, 0, -1, 1, 0 ]);
+            let colors = new Float32Array([ 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0 ]);
+            let indices = new Uint16Array([ 0, 1, 2, 0, 2, 3 ]);
+            var theta = 0, thetaLoc;
+            var length = 1, LengthLoc;
+            var direction = true;
+            var delay = 100;
+            
+            init();
+            render();
+
+            function init() {
+                //var canvas = document.createElement('canvas');
+                var canvas = document.getElementById('glCanvas');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                //document.body.appendChild(canvas);
+
+                gl = canvas.getContext('webgl2', {antialias: false});
+                if(!gl) {
+                    alert("WebGL 2 is not available!");
+                    return;
+                }
+
+                // Configure WebGL
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0.2, 0.2, 0.2, 1.0);
+
+                // Load shaders and initialize attribute buffers
+                var program = initShaders(gl, "vertex-shader", "fragment-shader");
+                gl.useProgram(program);
+
+                // Load the data into the GPU
+                var bufferId = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, bufferId);
+                gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+                // Associate our shader variables with our data buffer
+                var vPosition = gl.getAttribLocation(program, "vPosition");
+                gl.vertexAttribPointer(vPosition, 2, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(vPosition);
+
+                var cbufferId = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, cbufferId);
+                gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+
+                var vColor = gl.getAttribLocation(program, "vColor");
+                gl.vertexAttribPointer(vColor, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(vColor);
+
+                // Create an index buffer
+                var ibufferId = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibufferId);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+                thetaLoc = gl.getUniformLocation(program, "theta");
+                gl.uniform1f(thetaLoc, theta);
+
+                LengthLoc = gl.getUniformLocation(program, "length");
+                gl.uniform1f(LengthLoc, length);
+
+                document.getElementById("buttonDir").onclick = function(){
+                    direction = !direction;
+                }
+                document.getElementById("myMenu").onclick = function(){
+                    switch(event.target.value)
+                    {
+                        case 'fast':
+                            delay *= 0.5;
+                            break;
+                        case 'slow':
+                            delay *= 2.0;
+                            break;
+                        case 'big':
+                            length *= 1.1;
+                            break;
+                        case 'small':
+                            length *= 0.9;
+                            break;
+                    }
+                }
+                
+                document.getElementById("sliderTime").onchange = function()
+                {
+                    delay = event.target.value;                    
+                }
+            }
+
+            function render() {
+                setTimeout(function() {
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                theta += (direction ? 0.1 : -0.1);
+                gl.uniform1f(thetaLoc, theta);
+                gl.uniform1f(LengthLoc, length);
+
+                //gl.drawArrays(gl.TRIANGLES, 0, 3);
+                gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0); 
+
+                window.requestAnimationFrame(render);
+                } , delay);
+            }
+        </script>
+    </body>
+</html>
