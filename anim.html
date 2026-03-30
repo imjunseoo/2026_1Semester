@@ -13,6 +13,7 @@
     </head>
     <body>
         <button id="buttonDir">Change Rotation Direction</button>
+        <button id="buttonStop">Stop Rotation</button>
         <select id="myMenu" size = "4">            
             <option value="fast">Spin Faster</option>
             <option value="slow">Spin Slower</option>
@@ -22,6 +23,9 @@
         <div>
             Tiem Interval: 10<input id="sliderTime" type="range" min="10" max="100" step="5" value="100"> 100
         </div>
+        <p style = "margin: 10px 5px; font-weight:bold; color : #333;">
+            * Press 'A'  or 'a' key to change background color randomly.
+        </p>
         <canvas id="glCanvas"></canvas>
         <script type="text/javascript" src="initShaders.js"></script>
         <script type="x-shader/x-vertex" id="vertex-shader">#version 300 es
@@ -62,6 +66,7 @@
             var length = 1, LengthLoc;
             var direction = true;
             var delay = 100;
+            var isRotating = true;
             
             init();
             render();
@@ -72,6 +77,7 @@
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight;
                 //document.body.appendChild(canvas);
+                 
 
                 gl = canvas.getContext('webgl2', {antialias: false});
                 if(!gl) {
@@ -82,6 +88,7 @@
                 // Configure WebGL
                 gl.viewport(0, 0, canvas.width, canvas.height);
                 gl.clearColor(0.2, 0.2, 0.2, 1.0);
+                    
 
                 // Load shaders and initialize attribute buffers
                 var program = initShaders(gl, "vertex-shader", "fragment-shader");
@@ -141,13 +148,34 @@
                 {
                     delay = event.target.value;                    
                 }
+
+                window.addEventListener('keydown', function(event){
+                
+                    if(event.key === 'a' || event.key === 'A')
+                    {
+                        let randomR = Math.random();
+                        let randomG = Math.random();
+                        let randomB = Math.random();        
+                        gl.clearColor(randomR, randomG, randomB, 1.0);                
+                    }
+                });
+                document.getElementById("buttonStop").onclick = function(){
+                
+                    isRotating = !isRotating;
+                }
+                
             }
 
             function render() {
                 setTimeout(function() {
                 gl.clear(gl.COLOR_BUFFER_BIT);
 
-                theta += (direction ? 0.1 : -0.1);
+                if(isRotating)
+                {
+                    theta += (direction ? 0.1 : -0.1);                
+                }
+
+                
                 gl.uniform1f(thetaLoc, theta);
                 gl.uniform1f(LengthLoc, length);
 
