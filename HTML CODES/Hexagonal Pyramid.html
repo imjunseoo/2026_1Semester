@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>20225238 임준서</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+            }
+            #myMenu {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background: rgba(255, 255, 255, 0.8);
+                padding: 10px;
+                border-radius: 5px;
+                z-index: 10;
+                font-family: sans-serif;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="myMenu">
+            <input type="radio" id="xAxis" name="rotation">Rotate X
+            <input type="radio" id="yAxis" name="rotation">Rotate Y
+            <input type="radio" id="zAxis" name="rotation" checked>Rotate Z
+            <button id="rotateBtn">Start Rotation</button><br>
+        </div>
+        <canvas id="glCanvas"></canvas>
+        <script type="text/javascript" src="initShaders.js"></script>
+        <script type="x-shader/x-vertex" id="vertex-shader">#version 300 es
+            in vec3 vPosition, vColor;
+            out vec4 fColor;
+            uniform vec3 theta;
+
+            void main()
+            {
+                vec3 angles = radians(theta);
+                vec3 c = cos(angles);
+                vec3 s = sin(angles);
+
+                mat4 rx = mat4(1, 0, 0, 0,
+                               0, c.x, s.x, 0,
+                               0, -s.x, c.x, 0,
+                               0, 0, 0, 1);
+                mat4 ry = mat4(c.y, 0, -s.y, 0,
+                               0, 1, 0, 0,
+                               s.y, 0, c.y, 0,
+                               0, 0, 0, 1);
+                mat4 rz = mat4(c.z, s.z, 0, 0,
+                               -s.z, c.z, 0, 0,
+                               0, 0, 1, 0,
+                               0, 0, 0, 1);
+
+                gl_Position = rz * ry * rx * vec4(vPosition, 1.0);
+                fColor = vec4(vColor, 1.0);
+            }
+        </script>
+        <script type="x-shader/x-fragment" id="fragment-shader">#version 300 es
+            precision mediump float;
+
+            in vec4 fColor;
+            out vec4 fragColor;
+
+            void main()
+            {
+                fragColor = fColor;
+            }
+        </script>
+        <script type="module">
+            var gl;
+
+            let vertices = new Float32Array([
+                 0.0, -1.0,  0.0,
+                 0.0,  0.5,  0.0,
+                -0.5,  0.5, -0.866,
+                 0.5,  0.5, -0.866,
+                 1.0,  0.5,  0.0,
+                 0.5,  0.5,  0.866,
+                -0.5,  0.5,  0.866,
+                -1.0,  0.5,  0.0
+            ]);
+
+            let colors = new Float32Array([
+                0.0, 0.0, 0.0,
+                1.0, 1.0, 1.0,
+                0.0, 1.0, 0.0,
+                1.0, 1.0, 0.0,
+                1.0, 0.0, 0.0,
+                1.0, 0.0, 1.0,
+                0.0, 0.0, 1.0,
+                0.0, 1.0, 1.0
+            ]);
+
+            let indices = new Uint16Array([
+                0, 2, 3,  0, 3, 4,  0, 4, 5,  0, 5, 6,  0, 6, 7,  0, 7, 2,
+                1, 3, 2,  1, 4, 3,  1, 5, 4,  1, 6, 5,  1, 7, 6,  1, 2, 7
+            ]);
+            
+            var theta = [0, 0, 0];
+            var thetaLoc;
+            var rotation = false;
+            var axis = 2;
+
+            init();
+            render();
+
+            function init() {
+                var canvas = document.getElementById('glCanvas');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+
+                gl = canvas.getContext('webgl2', {antialias: true});
+                if(!gl) {
+                    alert("WebGL 2 is not available!");
+                    return;
+                }
+
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0.2, 0.2, 0.2, 1.0);
+                gl.enable(gl.DEPTH_TEST);
+
+                var program = initShaders(gl, "vertex-shader", "fragment-shader");
+                gl.useProgram(program);
+
+                var bufferId = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, bufferId);
+                gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+                var vPosition = gl.getAttribLocation(program, "vPosition");
+                gl.vertexAttribPointer(vPosition, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(vPosition);
+
+                var cbufferId = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, cbufferId);
+                gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+
+                var vColor = gl.getAttribLocation(program, "vColor");
+                gl.vertexAttribPointer(vColor, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(vColor);
+
+                var ibufferId = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibufferId);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+                thetaLoc = gl.getUniformLocation(program, "theta");
+                
+                document.getElementById("rotateBtn").onclick = function() {
+                    rotation = !rotation;
+                    this.innerText = (rotation ? "Stop Rotation" : "Start Rotation");
+                }
+
+                document.getElementById("xAxis").onclick = () => axis = 0;
+                document.getElementById("yAxis").onclick = () => axis = 1;
+                document.getElementById("zAxis").onclick = () => axis = 2;
+
+                window.onresize = function() {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    gl.viewport(0, 0, canvas.width, canvas.height);
+                };
+            }
+
+            function render() {
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                
+                if (rotation) {
+                    theta[axis] += 1.0;
+                }
+                gl.uniform3fv(thetaLoc, theta);
+                
+                gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+
+                window.requestAnimationFrame(render);
+            }
+        </script>
+    </body>
+</html>
