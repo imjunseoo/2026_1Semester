@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>20225238 임준서</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="myMenu"><center>
+            <button id="leftBtn">◀</button> <button id="upBtn">▲</button> <button id="rightBtn">▶</button><br>
+            <button id="downBtn">▼</button>
+        </center></div>
+        <canvas id="glCanvas"></canvas>
+        <script type="text/javascript" src="initShaders.js"></script>
+        <script type="text/javascript" src="MV.js"></script>
+        <script type="x-shader/x-vertex" id="vertex-shader">#version 300 es
+            layout(location = 0) in vec3 vPosition;
+            layout(location = 2) in vec2 vTexCoord;
+            out vec2 fTexCoord;
+            uniform mat4 worldMat, viewMat, projMat;
+
+            void main()
+            {
+                gl_Position = projMat * viewMat * worldMat * vec4(vPosition, 1.0);
+                fTexCoord = vTexCoord;
+            }
+        </script>
+        <script type="x-shader/x-fragment" id="fragment-shader">#version 300 es
+            precision mediump float;
+
+            uniform sampler2D texImage;
+            in vec2 fTexCoord;
+            out vec4 fragColor;
+
+            void main()
+            {
+                fragColor = texture(texImage, fTexCoord);
+		        //fragColor = vec4(fTexCoord, 1, 1);
+            }
+        </script>
+        <script type="module">
+            var gl;
+            let vertices = [];
+            var vertexCount = 0;
+
+            var eye = vec3(2, 2, 2), at = vec3(0, 0, 0), cameraVec = vec3(-0.57735, -0.57735, -0.57735); // 0.57735 == 1.0/Math.sqrt(3)
+            var worldMatrix, viewMatrix, projectMatrix;
+            var worldMatLoc, viewMatLoc, projMatLoc, texImageLoc;
+
+            generateModel();
+            init();
+            render();
+
+            function init() {
+                var canvas = document.getElementById('glCanvas');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight - document.getElementById('myMenu').offsetHeight;
+
+                gl = canvas.getContext('webgl2', {antialias: false});
+                if(!gl) {
+                    alert("WebGL 2 is not available!");
+                    return;
+                }
+
+                // Configure WebGL
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.clearColor(0.2, 0.2, 0.2, 1.0);
+
+                // Enable hidden surface removal
+                gl.enable(gl.DEPTH_TEST);
+
+                // Load shaders and initialize attribute buffers
+                var program = initShaders(gl, "vertex-shader", "fragment-shader");
+                gl.useProgram(program);
+
+                // Load the data into the GPU
+                var vbufferId = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vbufferId);
+                gl.bufferData(gl.ARRAY_BUFFER, flatten(vertices), gl.STATIC_DRAW);
+
+                gl.enableVertexAttribArray(0);
+                gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
+
+                gl.enableVertexAttribArray(2);
+                gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 20, 12);
+
+                worldMatrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+                worldMatLoc = gl.getUniformLocation(program, "worldMat");
+                gl.uniformMatrix4fv(worldMatLoc, false, worldMatrix);
+
+                viewMatrix = lookAt(vec3(2, 2, 2), vec3(0, 0, 0), vec3(0, 1, 0));
+                viewMatLoc = gl.getUniformLocation(program, "viewMat");
+                gl.uniformMatrix4fv(viewMatLoc, false, flatten(viewMatrix));
+                
+                // 3D perspective viewing
+                var aspectRatio = canvas.width / canvas.height;
+                projectMatrix = perspective(90, aspectRatio, 0.001, 1000);
+                projMatLoc = gl.getUniformLocation(program, "projMat");
+                gl.uniformMatrix4fv(projMatLoc, false, flatten(projectMatrix));
+
+                texImageLoc = gl.getUniformLocation(program, "texImage");
+		        var imageTex = new Image();
+                imageTex.src = "Images/logo.bmp";
+                imageTex.onload = function() {
+                    var textureID = gl.createTexture();
+                    gl.activeTexture(gl.TEXTURE0);
+                    gl.bindTexture(gl.TEXTURE_2D, textureID);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, imageTex);
+                    gl.generateMipmap(gl.TEXTURE_2D);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REFEAT);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REFEAT);
+                }
+                
+                var imageTex1 = new Image();
+                imageTex1.src = "Images/crate.bmp";
+                imageTex1.onload = function(){
+                    var textureID = gl.createTexture();
+                    gl.activeTexture(gl.TEXTURE1);
+                    gl.bindTexture(gl.TEXTURE_2D, textureID);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, imageTex1);
+                    gl.generateMipmap(gl.TEXTURE_2D);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                }
+
+                var imageTex2 = new Image();
+                imageTex2.src = "Images/brick.bmp";
+                imageTex2.onload = function(){
+                    var textureID = gl.createTexture();
+                    gl.activeTexture(gl.TEXTURE2);
+                    gl.bindTexture(gl.TEXTURE_2D, textureID);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, imageTex2);
+                    gl.generateMipmap(gl.TEXTURE_2D);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                }
+
+                var imageTex3 = new Image();
+                imageTex3.src = "Images/monalisa.bmp";
+                imageTex3.onload = function(){
+                    var textureID = gl.createTexture();
+                    gl.activeTexture(gl.TEXTURE3);
+                    gl.bindTexture(gl.TEXTURE_2D, textureID);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, imageTex3);
+                    gl.generateMipmap(gl.TEXTURE_2D);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                }
+
+                var sinTheta = Math.sin(0.1);
+                var cosTheta = Math.cos(0.1);
+                document.getElementById("leftBtn").onclick = function() {
+                    var newVecX =  cosTheta*cameraVec[0] + sinTheta*cameraVec[2];
+                    var newVecZ = -sinTheta*cameraVec[0] + cosTheta*cameraVec[2];
+                    cameraVec[0] = newVecX;
+                    cameraVec[2] = newVecZ;
+                };
+                document.getElementById("rightBtn").onclick = function() {
+                    var newVecX = cosTheta*cameraVec[0] - sinTheta*cameraVec[2];
+                    var newVecZ = sinTheta*cameraVec[0] + cosTheta*cameraVec[2];
+                    cameraVec[0] = newVecX;
+                    cameraVec[2] = newVecZ;
+                };
+                document.getElementById("upBtn").onclick = function() {
+                    var newPosX = eye[0] + 0.5 * cameraVec[0];
+                    var newPosZ = eye[2] + 0.5 * cameraVec[2];
+                    if (newPosX > -10 && newPosX < 10 && newPosZ > -10 && newPosZ < 10 ) {
+                        eye[0] = newPosX;
+                        eye[2] = newPosZ;
+                    } else {
+                        alert("경계에 닿았습니다!!!");
+                    }
+                };
+                document.getElementById("downBtn").onclick = function() {
+                    var newPosX = eye[0] - 0.5 * cameraVec[0];
+                    var newPosZ = eye[2] - 0.5 * cameraVec[2];
+                    if (newPosX > -10 && newPosX < 10 && newPosZ > -10 && newPosZ < 10 ) {
+                        eye[0] = newPosX;
+                        eye[2] = newPosZ;
+                    } else {
+                        alert("경계에 닿았습니다!!!");
+                    }
+                };
+
+                window.onresize = function() {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight - document.getElementById('myMenu').offsetHeight;
+                    gl.viewport(0, 0, canvas.width, canvas.height);
+
+                    // 3D perspective viewing
+                    var aspectRatio = canvas.width / canvas.height;
+                    projectMatrix = perspective(90, aspectRatio, 0.001, 1000);
+                    gl.uniformMatrix4fv(projMatLoc, false, flatten(projectMatrix));
+                };
+            }
+
+            function render() {
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+                at[0] = eye[0] + cameraVec[0];
+                at[1] = eye[1] + cameraVec[1];
+                at[2] = eye[2] + cameraVec[2];
+                viewMatrix = lookAt(eye, at, vec3(0, 1, 0));
+                gl.uniformMatrix4fv(viewMatLoc, false, flatten(viewMatrix));
+                
+                gl.uniform1i(texImageLoc, 1);
+                gl.drawArrays(gl.TRIANGLES, 0, 12);
+                gl.uniform1i(texImageLoc, 2);
+                gl.drawArrays(gl.TRIANGLES, 12, 12);
+                gl.uniform1i(texImageLoc, 3);
+                gl.drawArrays(gl.TRIANGLES, 24, 12);
+                gl.uniform1i(texImageLoc, 0);
+                gl.drawArrays(gl.TRIANGLES, 36, 6);
+
+                window.requestAnimationFrame(render);
+            }
+
+            function generateModel() {
+                // Cube
+                const cube_pos = [ vec3(-0.5, -0.5, -0.5),
+                                   vec3( 0.5, -0.5, -0.5),
+                                   vec3( 0.5,  0.5, -0.5),
+                                   vec3(-0.5,  0.5, -0.5),
+                                   vec3(-0.5, -0.5,  0.5),
+                                   vec3( 0.5, -0.5,  0.5),
+                                   vec3( 0.5,  0.5,  0.5),
+                                   vec3(-0.5,  0.5,  0.5) ];
+                const cube_uv = [ vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 1) ];
+                texQuad(1, 2, 6, 5);    // right
+                texQuad(2, 1, 0, 3);    // back
+                texQuad(3, 0, 4, 7);    // left
+                texQuad(4, 5, 6, 7);    // front
+                texQuad(5, 4, 0, 1);    // bottom
+                texQuad(6, 2, 3, 7);    // top
+
+                function texQuad(a, b, c, d) {
+                    // two triangles (a, b, c) and (a, c, d)
+                    vertices.push(cube_pos[a]);
+                    vertices.push(cube_uv[0]);      vertexCount++;
+                    vertices.push(cube_pos[b]);
+                    vertices.push(cube_uv[1]);      vertexCount++;
+                    vertices.push(cube_pos[c]);
+                    vertices.push(cube_uv[2]);      vertexCount++;
+
+                    vertices.push(cube_pos[a]);
+                    vertices.push(cube_uv[0]);      vertexCount++;
+                    vertices.push(cube_pos[c]);
+                    vertices.push(cube_uv[2]);      vertexCount++;
+                    vertices.push(cube_pos[d]);
+                    vertices.push(cube_uv[3]);      vertexCount++;
+                };
+
+                // Ground
+                vertices.push(vec3(-10, -1,  10), vec2(0, 0),
+                              vec3( 10, -1,  10), vec2(10, 0),
+                              vec3( 10, -1, -10), vec2(10, 10),
+                              vec3(-10, -1,  10), vec2(0, 0),
+                              vec3( 10, -1, -10), vec2(10, 10),
+                              vec3(-10, -1, -10), vec2(0, 10));
+                vertexCount += 6;
+            }
+        </script>
+    </body>
+</html>
